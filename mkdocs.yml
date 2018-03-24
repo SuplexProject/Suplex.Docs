@@ -1,0 +1,4 @@
+site_name: Suplex
+pages:
+- Suplex: index.md
+theme: readthedocs
