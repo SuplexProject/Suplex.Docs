@@ -1,4 +1,5 @@
 site_name: Suplex
 pages:
 - Suplex: index.md
+- ISecureObject: isecureobject.md
 theme: readthedocs
