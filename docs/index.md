@@ -52,14 +52,48 @@ This example uses a simple WinForms app to demonstrate Suplex integration.  The 
 
 - Full source here: <a href="https://github.com/SuplexProject/Suplex.Sample" target="_blank">Suplex.Sample</a>
 
+Most of the code in the sample app is setup-oriented. not functionally relevant to Suplex itself.  Below are the key functions to instantiating the FileSystemDal and selecting security at runtime.  The critical code elements are:
 
+```c#
+//Load the Suplex FileStore from disk
+_suplexDal = FileSystemDal.LoadFromYamlFile( filestorePath );
+
+//Eval the security for an object at runtime.
+//Note: The return value may be null if the object is not found, the user is disabled, or for other reasons.
+//      Be sure to null-check usage.
+SecureObject secureObject =
+    (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmMain", ((User)cmbUsers.SelectedItem).Name );
+
+//Assess 'AccessAllowed' (bool) for the object or a descendant (child) object
+secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
+secureObject?.FindChild<SecureObject>( "txtId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
+```
+
+In context, here's the same code as applied within the relevant methods:
 ```c#
 public partial class MainDlg : Form
 {
+    FileSystemDal _suplexDal = new FileSystemDal();
+
+    /// <summary>
+    /// Loads the specified file into a Suplex FileSystemDal and refreshes the dialog
+    /// </summary>
+    /// <param name="filestorePath"></param>
+    void RefreshSuplex(string filestorePath)
+    {
+        _suplexDal = FileSystemDal.LoadFromYamlFile( filestorePath );
+        this.UiThreadHelper( () => cmbUsers.DataSource = new BindingSource( _suplexDal.Store.Users.OrderBy( u => u.Name ).ToList(), null ).DataSource );
+    }
+
+    /// <summary>
+    /// Simulates changing security context.  Normally, this would occur at the time of application/method invocation.
+    /// </summary>
     private void cmbUsers_SelectedIndexChanged(object sender, EventArgs e)
     {
         //Evaluate the security information, starting from the top-most control
-        SecureObject secureObject = (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmMain", ((User)cmbUsers.SelectedItem).Name );
+        SecureObject secureObject =
+            (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmMain", ((User)cmbUsers.SelectedItem).Name );
+
         if( chkApplyRecursive.Checked )
             ApplyRecursive( secureObject );
         else
