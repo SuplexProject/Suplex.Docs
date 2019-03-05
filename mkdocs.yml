@@ -1,5 +1,7 @@
 site_name: Suplex
 pages:
 - Suplex: index.md
-- ISecureObject: isecureobject.md
+# - Make an RBAC!: rbac.md
+- Secure Objects: isecureobject.md
+# - Security Principals: securityprincipals.md
 theme: readthedocs

@@ -2,7 +2,7 @@
 
 Suplex.Security is an application security and RBAC abstraction Layer, which implements a hierarchical DACL model and common role/task RBAC model. Suplex is suitable for use in any application/API.
 
-## Philosophy
+### Philosophy
 
 The intent of Suplex is:
 
@@ -12,7 +12,7 @@ The intent of Suplex is:
 
 ## QuickStart
 
-Wanna get started without a lot of pain?  Me too.  Given the philosophical statement above, you won't need much code to use Suplex in your application.  This quick start guide assumes a working knowledge of Visual Studio, C#, and nuget.
+Wanna get started without a lot of pain?  Me too.  Given the philosophical statement above, you won't need much code to use Suplex in your application.  This quick start guide assumes a working knowledge of Visual Studio, C#, and NuGet.
 
 ### Get the Admin UI
 
@@ -32,4 +32,84 @@ Download the latest release of <a href="https://github.com/SuplexProject/Suplex.
     - Complete the UniqueName field, where the Secure Object's UniqueName is the key field you'll use at runtime to identify the security entries in the Suplex store.
     - In the Permissions grid, choose _New Permission > UIRight_. Select a Group and select the desired permission settings.
 
-- <details style="cursor: hand;"><summary>Click here to expand this section for animated eamples of editing a Suplex FileStore.</summary><p align="center"><img alt="Synapse Concept" src="img/SuplexUI.gif" /></p><p align="center"><iframe width="640" height="360" src="https://www.youtube.com/embed/0ZeTzXGVWeg" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></p></details>
+- Once you're finished creating Security Principals and Secure Objects, save your work to a file - click the _Save Suplex File Store_ icon from the toolbar.
+
+<!-- 2980B9 -->
+- <details style="cursor: hand;"><summary><font style="background-color:#BBD7E9;">Click here</font> to expand this section for animated samples of editing a Suplex FileStore.</summary>
+<p align="center">
+<iframe width="560" height="315" src="https://www.youtube.com/embed/FimK9o6e7l0" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+</p></details>
+
+#### 2. Use the Suplex FileStore in an App
+
+This example uses a simple WinForms app to demonstrate Suplex integration.  The highlights are:
+
+- NuGet references to <a href="https://www.nuget.org/packages/Suplex.Security.Core/" target="_blank">Suplex.Security.Core</a> and <a href="https://www.nuget.org/packages/Suplex.Security.FileSystemDal/" target="_blank">Suplex.Security.FileSystemDal</a>.
+
+- A FileWatcher to detect updates to the FileStore and dynamically reload security information.
+
+- A combobox to simulate switching security context.
+
+- Full source here: <a href="https://github.com/SuplexProject/Suplex.Sample" target="_blank">Suplex.Sample</a>
+
+
+```c#
+public partial class MainDlg : Form
+{
+    private void cmbUsers_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        //Evaluate the security information, starting from the top-most control
+        SecureObject secureObject = (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmMain", ((User)cmbUsers.SelectedItem).Name );
+        if( chkApplyRecursive.Checked )
+            ApplyRecursive( secureObject );
+        else
+            ApplyDirect( secureObject );
+    }
+
+    /// <summary>
+    /// Brute-force permissioning - direct lookup of results with "known" translation of non-UI rights
+    /// </summary>
+    /// <param name="secureObject">A reference to the resolved/evaluated security object.</param>
+    void ApplyDirect(SecureObject secureObject)
+    {
+        frmMain.Visible = secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
+        txtId.Visible = secureObject?.FindChild<SecureObject>( "txtId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
+        btnCreate.Enabled = secureObject?.FindChild<SecureObject>( "btnCreate" ).Security.Results.GetByTypeRight( RecordRight.Insert ).AccessAllowed ?? false;
+    }
+
+    /// <summary>
+    /// Recursive, discovery-based security application; see UIExtensions->ApplySecurity
+    /// </summary>
+    /// <param name="secureObject">A reference to the resolved/evaluated security object.</param>
+    void ApplyRecursive(SecureObject secureObject)
+    {
+        frmMain.ApplySecurity( secureObject );
+    }
+}
+
+public static class UIExtensions
+{
+    public static void ApplySecurity(this Control control, ISecureObject secureObject)
+    {
+        if( secureObject == null )
+        {
+            control.Visible = false;
+            return;
+        }
+
+        ISecureObject found = secureObject.UniqueName.Equals( control.Name, StringComparison.OrdinalIgnoreCase ) ?
+            secureObject : secureObject.FindChild<ISecureObject>( control.Name );
+        if( found != null && found.Security.Results.ContainsRightType( typeof( UIRight ) ) )
+        {
+            control.Visible = found.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
+            control.Enabled = found.Security.Results.GetByTypeRight( UIRight.Enabled ).AccessAllowed;
+            if( control is TextBox )
+                ((TextBox)control).ReadOnly = !found.Security.Results.GetByTypeRight( UIRight.Operate ).AccessAllowed;
+        }
+
+        if( control.HasChildren )
+            foreach( Control child in control.Controls )
+                child.ApplySecurity( secureObject );
+    }
+}
+```

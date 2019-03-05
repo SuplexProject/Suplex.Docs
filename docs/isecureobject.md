@@ -43,7 +43,7 @@ public enum AuditType
 
 ## AccessControlLists (Acls)
 
-### DiscretionaryAcl (Dacl)
+### DiscretionaryAcl (Dacl (Permissions, Rights))
 
 The Discretionary Access Control List is a collection of IAccessControlEntry (Aces).  A Dacl specifies whether specific permissions are granted/denied to an object.
 
@@ -57,6 +57,7 @@ The System Access Control List is a collection of IAccessControlEntryAudit (Audi
 |-|-|-|-
 |UId|Guid|Yes|Primary key in the datastore, a GUID to support replication amongst stores.
 |Allowed|bool|Yes|A value of `true` grants access to a permission, and a value of `false` explicitly denies access to a permission.  **Important**: An explicit deny __always__ overrides a grant.
+|Inheritable|bool|Yes|Specifies whether the current Ace will propagate to child Dacls.
 |InheritedFrom|Nullable Guid|No|System-populated at runtime; the UId of the original Ace from which the current entry was created.
 |TrusteeUId|Nullable Guid|No*|The UId of the User or Group to which the Ace is assigned.  When the containing Acl is evaluated, any Aces present will be included in the resultant security calculation.  Strictly speaking, Trustee-free Aces could be inserted into an Acl at runtime and evaluated safely.
 |Right|T|Yes|T can be any Enum with a Flags attribute, such that individual rights can be combined for a single permission entry.  Built-in Rights enums are shown below.
@@ -115,6 +116,18 @@ An IAccessControlEntryAudit ace inherits all the properties from IAccessControlE
 |-|-|-|-
 |Allowed|bool|Yes|Specifies whether to audit grants for a permission.
 |Denied|bool|Yes|Specifies whether to audit explicit denies for a permission.
+
+## IAccessControlEntryConverters\<TSource, TTarget> (Permission Converters)
+
+An IAccessControlEntryConverter translates the resultant security for any given Ace/Right into a new Ace/Right of any other Ace type.  The new Ace's `Allowed` property is based on the source-Ace security result, and the new Ace can be configured with standard `Inheritable` settings.
+
+|Field|Type|Required|Description
+|-|-|-|-
+|TSource|Right Type|Yes|Specifies the Right type from which to take the resultant Allowed value.
+|Source Right|Right Value|Yes|Specifies the Right value from which to take the resultant Allowed value.
+|TTarget|Right Type|Yes|Specifies the Right type (T) to be used when creating a new IAccessControlEntry\<T>.
+|Target Right|Right Value|Yes|Specifies the Right value (of T) for the new Ace.
+|Inheritable|bool|Yes|Specifies whether the new Ace will propagate to child Dacls.
 
 ## Results (SecurityResults)
 
