@@ -2,7 +2,7 @@
 
 The primary interface for Suplex is a hierarchy of ISecureObjects, where each ISecureObject carries a SecurityDescriptor, which, as a structure, describes the security disposition of the object itself.  By analogy, an ISecureObject can be thought of like a directory on a computer - the directory metadata contains a description of who has what kind of access, and how that access was granted (or denied) - either by directly-applied permissions or through inheritance.
 
-At runtime, security information is selected from a Suplex data store and then used to populate the SecurityDescriptor of an ISecureObject.  The SecurityDescriptor carries two lists: the DiscretionaryAccessControlList (DACL), which is a list of permissions, and the SystemAccessControlList (SACL), which is a list of audit entries.  The items in the ACLs are called AccessControlEntries (ACEs), where each ACE specifies who has what kind of access, and whether that access is audited.
+At runtime, security information is selected from a Suplex data store and then used to populate the SecurityDescriptor of an ISecureObject.  The SecurityDescriptor carries two lists: the DiscretionaryAccessControlList (Dacl), which is a list of permissions, and the SystemAccessControlList (Sacl), which is a list of audit entries.  The items in the ACLs are called AccessControlEntries (Aces), where each Ace specifies who has what kind of access, and whether that access is audited.
 
 ## ISecureObject
 
@@ -137,5 +137,12 @@ A dictionary of of SecurityResult entries, set by the system at runtime when a S
 |-|-|-|-
 |RightName|string|Yes|The name of the permission.
 |AccessAllowed|bool|Yes|Specifies if access was granted or denied.
-|AuditSuccess|bool|Yes|Specifies if the permission will be audit for AccessAllowed = true.
-|AuditFailure|bool|Yes|Specifies if the permission will be audit for AccessAllowed = false.
+|AuditSuccess|bool|Yes|Specifies if the permission will be audited for AccessAllowed = true.
+|AuditFailure|bool|Yes|Specifies if the permission will be audited for AccessAllowed = false.
+
+#### Example of evaluating SecurityResults 
+```c#
+//Assess 'AccessAllowed' (bool) for the object or a descendant (child) object
+secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
+secureObject?.FindChild<SecureObject>( uniqueName ).Security.Results.GetByTypeRight( RecordRight.List ).AccessAllowed;
+```
