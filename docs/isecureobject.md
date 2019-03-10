@@ -6,9 +6,13 @@ At runtime, security information is selected from a Suplex data store and then u
 
 ## ISecureObject
 
+Suplex ships with a default implementation for ISecureObject, `SecureObject`, but implementing the interface on your own classes is designed to be easy - all the methods of ISecureObject are implemented as extension methods, so you only need to implement the properties.  In doing so, implement Parent/Children as strongly-typed to your class and use the default ISecurityDescriptor implementation, `SecurityDescriptor`.
+
+#### Properties
+
 The properties supporting an ISecureObject are just enough to identify it in a datastore and represent its hierarchy.
 
-|Field|Type|Required|Description
+|Field/Method|Type|Required|Description
 |-|-|-|-
 |UId|Guid|Yes|Primary key in the datastore, a GUID to support replication amongst stores.
 |UniqueName|string|Yes|Human-identifiable name for an object, should be unique within a hierarchy.
@@ -17,13 +21,31 @@ The properties supporting an ISecureObject are just enough to identify it in a d
 |Children|List|No|A collection of the current object's child-ISecureObjects, if there are any.
 |Security|ISecurityDescriptor|Yes|The SecurityDescriptor for the ISecureObject contains a description of the security disposition.
 
+#### Key Methods
+
+|Method|Return Value|Description
+|-|-|-
+|EvalSecurity()|SecurityResults|Recursively calculates the security results for the current object and all descendants.
+|FindChild<*T*>( `uniqueName` )|*T*, where T : ISecureObject| Recursively searches the Children hierarchy for a matching: `child.UniqueName.Equals( uniqueName, StringComparison.OrdinalIgnoreCase ) )`
+
+
+### Example Code
+```c#
+//Calculate SecurityResults for the object hierarchy
+SecurityResults results = secureObject.EvalSecurity();
+
+//Find a child
+SecureObject childObject = secureObject.FindChild<SecureObject>( "uniqueName" );
+```
+
+
 ## ISecurityDescriptor
 
 |Field|Type|Required|Description
 |-|-|-|-
-|DaclAllowInherit|bool|Yes|Specifies if the Dacl can inherit permission Aces from parent-ISecureObject-Dacls.
-|SaclAllowInherit|bool|Yes|Specifies if the Sacl can inherit audit Aces from parent-ISecureObject-Sacls.
-|SaclAuditTypeFilter|AuditType|Yes|Specifies the granularity of Audit messages.  See below for detail.
+|DaclAllowInherit|bool|Yes|Specifies if the Dacl can inherit permission Aces from parent-ISecureObject-Dacls.  Default is **true**.
+|SaclAllowInherit|bool|Yes|Specifies if the Sacl can inherit audit Aces from parent-ISecureObject-Sacls.  Default is **true**.
+|SaclAuditTypeFilter|AuditType|Yes|Specifies the granularity of Audit messages.  See below for detail.  Default is  **SuccessAudit \| FailureAudit \| Information \| Warning \| Error**
 |Dacl|IDiscretionaryAcl|Yes|A list of permission Aces for the current ISecureObject.  At runtime, inheritable permission Aces are evaluated as part of the current Dacl.
 |Sacl|ISystemAcl|Yes|A list of audit Aces for the current ISecureObject.  At runtime, inheritable audit Aces are evaluated as part of the current Sacl.
 |Results|SecurityResults|Yes|System-generated list of resultant security, calculated post-eval.
@@ -41,6 +63,36 @@ public enum AuditType
 }
 ```
 
+### Example Code
+```c#
+//create a new SecureObject
+SecureObject secureObject = new SecureObject() { UniqueName = "uniqueName" };
+//block inheritance of Dacl Aces from parent objects
+secureObject.Security.DaclAllowInherit = false;
+//populate the Dacl
+secureObject.Security.Dacl = new DiscretionaryAcl
+{
+    new AccessControlEntry<FileSystemRight>
+    {
+        Allowed = true,
+        Right = FileSystemRight.FullControl
+    },
+    //this is an explicit-Deny Ace, and will not be inherited to child Dacls
+    new AccessControlEntry<FileSystemRight>
+    {
+        //explicit Deny, overrides Execute, List from FullControl above
+        Allowed = false,
+        Right = FileSystemRight.Execute | FileSystemRight.List,
+        //will not be inherited to child Dacls
+        Inheritable = false
+    },
+    new AccessControlEntry<UIRight>
+    {
+        Right = UIRight.Operate | UIRight.Visible
+    }
+};
+```
+
 ## AccessControlLists (Acls)
 
 ### DiscretionaryAcl (Dacl (Permissions, Rights))
@@ -51,7 +103,7 @@ The Discretionary Access Control List is a collection of IAccessControlEntry (Ac
 
 The System Access Control List is a collection of IAccessControlEntryAudit (AuditAces).  A Sacl specifies what permissions (as specified in the Dacl) will generate audit records.
 
-## IAccessControlEntry\<T> (Ace)
+## IAccessControlEntry<*T*> (Ace)
 
 |Field|Type|Required|Description
 |-|-|-|-
@@ -61,6 +113,26 @@ The System Access Control List is a collection of IAccessControlEntryAudit (Audi
 |InheritedFrom|Nullable Guid|No|System-populated at runtime; the UId of the original Ace from which the current entry was created.
 |TrusteeUId|Nullable Guid|No*|The UId of the User or Group to which the Ace is assigned.  When the containing Acl is evaluated, any Aces present will be included in the resultant security calculation.  Strictly speaking, Trustee-free Aces could be inserted into an Acl at runtime and evaluated safely.
 |Right|T|Yes|T can be any Enum with a Flags attribute, such that individual rights can be combined for a single permission entry.  Built-in Rights enums are shown below.
+
+### Example Code
+```c#
+//create a new Ace
+//this is an explicit-Deny Ace, and will not be inherited to child Dacls
+IAccessControlEntry<FileSystemRight>
+    new AccessControlEntry<FileSystemRight>
+    {
+        //explicit Deny, overrides Execute, List from FullControl above
+        Allowed = false,
+        Right = FileSystemRight.Execute | FileSystemRight.List,
+        //will not be inherited to child Dacls
+        Inheritable = false 
+    };
+```
+
+#### Built-in Right-types
+
+Extend Suplex easily by providing your own enums with a Flags attribute.
+
 
 ```c#
 [Flags]
@@ -110,24 +182,68 @@ public enum SynchronizationRight
 
 ## IAccessControlEntryAudit (AuditAce)
 
-An IAccessControlEntryAudit ace inherits all the properties from IAccessControlEntry\<T>, but changes the behavior of `Allowed` and additionally implements `Denied`, as described below.
+An IAccessControlEntryAudit ace inherits all the properties from IAccessControlEntry\<T>, but changes the behavior of `Allowed` and additionally implements `Denied`, as described below.  For both Allowed and Denied, audits apply whether Aces are direct or inherited, and for Denied, whether implicit or explicit.
 
 |Field|Type|Required|Description
 |-|-|-|-
 |Allowed|bool|Yes|Specifies whether to audit grants for a permission.
 |Denied|bool|Yes|Specifies whether to audit explicit denies for a permission.
 
-## IAccessControlEntryConverters\<TSource, TTarget> (Permission Converters)
+### Example Code
+```c#
+//create a new AuditAce
+//this is an explicit-Deny Ace, and will not be inherited to child Dacls
+IAccessControlEntryAudit<FileSystemRight>
+    new AccessControlEntryAudit<FileSystemRight>
+    {
+        //will audit if Execute, List are allowed
+        Allowed = true,
+        //will audit if Execute, List are denied (implicitly or explicitly)
+        Denied = true,
+        Right = FileSystemRight.Execute | FileSystemRight.List,
+        //will not be inherited to child Dacls
+        Inheritable = false
+    };
+```
+
+## IAccessControlEntryConverters<*TSource, TTarget*> (Permission Converters)
 
 An IAccessControlEntryConverter translates the resultant security for any given Ace/Right into a new Ace/Right of any other Ace type.  The new Ace's `Allowed` property is based on the source-Ace security result, and the new Ace can be configured with standard `Inheritable` settings.
 
 |Field|Type|Required|Description
 |-|-|-|-
 |TSource|Right Type|Yes|Specifies the Right type from which to take the resultant Allowed value.
-|Source Right|Right Value|Yes|Specifies the Right value from which to take the resultant Allowed value.
+|SourceRight|TSource|Yes|Specifies the Right value from which to take the resultant Allowed value.
 |TTarget|Right Type|Yes|Specifies the Right type (T) to be used when creating a new IAccessControlEntry\<T>.
-|Target Right|Right Value|Yes|Specifies the Right value (of T) for the new Ace.
-|Inheritable|bool|Yes|Specifies whether the new Ace will propagate to child Dacls.
+|TargetRight|TTarget|Yes|Specifies the Right value (of T) for the new Ace.
+|Inheritable|bool|Yes|Specifies whether the new Ace will propagate to child Dacls. Default is **true**.
+|UId|Guid|No|Unique Id for identifying the record in a datastore.
+
+#### Example Code
+```c#
+//Creates an AceConverter to convert RecordRight.Insert -> UIRight.Enables,
+//  where the resultant right for RecordRight.Insert becomes the Allowed value for UIRight.Enabled.
+IAccessControlEntryConverter converter =
+    new AccessControlEntryConverter<RecordRight, UIRight>
+{
+    SourceRight = RecordRight.Insert,
+    TargetRight = UIRight.Enabled,
+    Inheritable = true
+};
+```
+
+#### More Information
+In effect, AceConverters create new Aces at runtime and inject them into the Dacl.  From the example code above, a new Ace with Right => UIRight.Enabled equal to the resultant AccessAllowed value for RecordRight.Insert from the current ISecureObject will be created, inserted, and subsequently evaluated.
+
+```c#
+this.Security.Dacl.Add(
+    new AccessControlEntry<UIRight>
+    {
+        Allowed = this.Security.Results.GetByTypeRight( RecordRight.Insert ).AccessAllowed,
+        Right = UIRight.Enabled
+    }
+);
+```
 
 ## Results (SecurityResults)
 
@@ -140,9 +256,15 @@ A dictionary of of SecurityResult entries, set by the system at runtime when a S
 |AuditSuccess|bool|Yes|Specifies if the permission will be audited for AccessAllowed = true.
 |AuditFailure|bool|Yes|Specifies if the permission will be audited for AccessAllowed = false.
 
-#### Example of evaluating SecurityResults 
+#### Example Code
 ```c#
-//Assess 'AccessAllowed' (bool) for the object or a descendant (child) object
-secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
-secureObject?.FindChild<SecureObject>( uniqueName ).Security.Results.GetByTypeRight( RecordRight.List ).AccessAllowed;
+//Calculate SecurityResults for the object hierarchy
+secureObject.EvalSecurity();
+
+//Assess 'AccessAllowed' (bool) for the object
+secureObject.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
+
+//Assess 'AccessAllowed' for a descendant (child) object
+secureObject.FindChild<SecureObject>( "uniqueName" ).
+    Security.Results.GetByTypeRight( RecordRight.List ).AccessAllowed;
 ```
