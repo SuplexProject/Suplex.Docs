@@ -221,8 +221,9 @@ An IAccessControlEntryConverter translates the resultant security for any given 
 
 #### Example Code
 ```c#
-//Creates an AceConverter to convert RecordRight.Insert -> UIRight.Enables,
-//  where the resultant right for RecordRight.Insert becomes the Allowed value for UIRight.Enabled.
+//Creates an AceConverter to convert RecordRight.Insert -> UIRight.Enabled,
+//  where the resultant AccessAllowed value for RecordRight.Insert becomes
+//  the Allowed value for UIRight.Enabled.
 IAccessControlEntryConverter converter =
     new AccessControlEntryConverter<RecordRight, UIRight>
 {
