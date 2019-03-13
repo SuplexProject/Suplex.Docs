@@ -1,7 +1,7 @@
 site_name: Suplex
 pages:
 - QuickStart: index.md
-- About Suplex and Best Practice: rbac.md
+- Using Suplex, Best Practice: suplex.md
 - Secure Objects: isecureobject.md
 # - Security Principals: securityprincipals.md
 theme: readthedocs
