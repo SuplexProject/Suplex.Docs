@@ -45,7 +45,7 @@ The real problem doesn't come until later, when an anomalous Role request comes 
 - **Option 2**: Program a new Role ('Interlopers') that properly defines the new Right ('Mixup').  This requires code maintenance, regression testing, documentation, and more.
 - **Both options** make us sad because we either grant too much privilege or have weird RBAC code, and we can predict it's only going to get worse, which makes us sadder still.
 
-![Traditional RBAC](../img/trad_rbac.png "Traditional RBAC")
+![Traditional RBAC](img/trad_rbac.png "Traditional RBAC")
 
 ## Suplex RBAC: Hierarchical, Inherited ACLs & Nested Security Principals
 
@@ -61,7 +61,7 @@ Getting right to it:
 
 The diagram below shows a sample implementation, and following are the various elements, decomposed and explained.
 
-![Suplex RBAC](../img/suplex_rbac.png "Suplex RBAC")
+![Suplex RBAC](img/suplex_rbac.png "Suplex RBAC")
 
 #### Example Code: Evaluate Security
 
