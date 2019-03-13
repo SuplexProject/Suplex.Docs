@@ -4,16 +4,7 @@
 
 Role Based Access Control (RBAC) is neither new nor exciting, but solid, reliable security design is critical for almost all applications.  Suplex evolves RBAC design by _securing by concept_ and pushing the application security implementation to config, thereby introducing abstraction and extensibility patterns.
 
-I wrote Suplex because I got tired of copy/pasting code into similar (but always a _little_ different) proprietary RBAC models for each new application, and I also wanted to make security administration easier over the lifetime of an application.
-
-Suplex change history:
-
- - 2001 - 2004: First draft
- - 2004 - 2007: Better, more-complete
- - 2007 - 2018: Open-sourced in 2007, code stable, only bug-fixes until 2018
- - 2018 - present: streamlined, easier to use, .netcore-compatible
- 
- In the latest release, the code is clean and the patterns are well-defined, and my hope is it's easy to plug Suplex into any application without much effort.
+I wrote Suplex because I got tired of copy/pasting code into similar (but always a _little_ different) proprietary RBAC models for each new application, and I also wanted to make security administration easier over the lifetime of an application.  The first draft of Suplex began in 2001 and I "finished" it in 2007.  Since then, and until the most recent (heavily streamlined) release, I've found the model to be accommodating and successful.
 
 <h1>Traditional RBAC v Securing by Concept</h1>
 
@@ -51,9 +42,9 @@ The real problem doesn't come until later, when an anomalous Role request comes 
 
 Getting right to it:
 
-1. Suplex mimics certain aspects of directory and file system security patterns, where a hierarchy of objects have permissions applied, and those permissions may be inherited to descendant objects in the tree,
+1. Suplex mimics certain aspects of directory and file system security patterns, where a hierarchy of "SecureObjects" have permissions applied, and those permissions may be inherited to descendant objects in the tree,
 
-2. Suplex implements permissions by logical Right-concepts, not directly related to application function,
+2. Suplex implements permissions by logical Right-concepts, not directly related to application concepts,
 
 3. Suplex Roles are constructed of aggregate sets of logical Rights,
 
@@ -73,28 +64,148 @@ secureObject0.EvalSecurity();
 secureObject1.Security.Results.GetByTypeRight( RecordRight.Insert ).AccessAllowed;
 ```
 
-## Securing by Concept
+# Deep-dive of Solution Architecture
 
-As mentioned above, traditional RBAC requires one to either understand exhaustive security profiles or define high levels of Rights-granularity.  Traditional RBAC also "understands" the application in the sense that Rights are correlated to code actions in application terminology.  Suplex addresses this issue by abstracting into logical concepts that are aligned with the physical actions being executed, then defining Roles as sets of logical concepts.  As with traditional RBAC, one must still know ahead of time what things need to be secured, but the direct security implementation becomes decoupled from the application itself.  Lastly, logical, action-oriented concepts better align to code implementation.
+**A quick Glossary and note on Casing Convention:**
 
-Role construction in Suplex is accomplished by aggregating sets of logical Rights, where each role can contain any arbitrary set of rights.  Additionally, Suplex implements a hierarchical inheritance pattern to allow Rights aggregation over a series of objects, where individual Rights may be granted/denied as appropriate.
+- **SecureObject**: an item onto which permissions are placed.
+- **UniqueName**: the human-friendly name for a SecureObject, should be unique within a discreet hierarchy.
+- **SecurityDescriptor**: the physical code structure that holds permission information.
+- **Ace**: Access Control Entry; a permission or audit entry in an Acl.  An Ace is a Trustee + Right.
+- **Acl**: Access Control List; a list of Aces.
+- **Dacl**: Discretionary Access Control List; permission Aces.
+- **Sacl**: System Access Control List; audit Aces.
+- **SecurityResults**: the resultant security, post-evaluation, for a given SecurityPrincipal on a SecureObject.
+- **SecurityPrincipal**: a User or Group.
+- **Trustee**: a SecurityPrincipal to which a Right has been granted.
+- **Role**: In Suplex, a Role is really a Group, dedicated for aggregating Rights.
+- **_Convention_**: Acronyms for Suplex structures, such as 'Acl', are expressed in CamelCase for readability and to bear similarity to the code base.
 
-### SecureObjects and Inheritance
 
-To accomplish this, Suplex defines a 'SecureObject', which is essentially a security topic within your application.  The SecureObject could be an actual object (instantiated class), or a "container" (a logical representation only).  SecureObjects host a SecurityDescriptor which contains a list of permissions, known as AccessControlEntires (Aces), where Aces are the Rights that are granted/denied to SecurityPrincipals (users/groups).  SecurityDescriptors control Ace propagation in the inheritance model, and individual Aces can define their own inheritance settings, as well.
+## Securing by Logical Concept
 
-To better understand inheritance, consider the following diagram, taking a simple SecureObject hierarchy and two Suplex conceptual Rights, 'UIRight.Enabled' and 'RecordRight.Insert'.  In the example:
+As mentioned above, traditional RBAC requires one to either define exhaustive security profiles or high levels of Rights-granularity.  Traditional RBAC also "understands" the application in the sense that Rights are correlated to code actions in application terminology.  Suplex addresses this issue by abstracting into logical concepts that are aligned with the physical actions being executed, then defining Roles as sets of logical concepts.  As with traditional RBAC, one must still know ahead of time what things need to be secured, but the direct security implementation becomes decoupled from application concepts.  Lastly, logical, action-oriented concepts better align to code implementation.
 
-- The UIRight.Enabled permission is individually configured not to inherit, therefore applies only to SecureObject_0.
-- The RecordRight.Insert permission propagates from SecureObject_0 to SecureObject_1, but does not further propagate to SecureObject_2 as SecureObject_2 specifically blocks inheritance. 
+#### Built-in Logical Rights:
+
+The following are the built-in logical Rights, but extending Suplex is as simple as having any enum with a Flags attribute.
+
+- **UIRight** { FullControl, Operate, Enabled, Visible }
+- **RecordRight** { FullControl, Delete, Update, Insert, Select, List }
+- **FileSystemRight** { FullControl, Execute, Delete, Write, Create, Read, List, ChangePermissions, ReadPermissions, TakeOwnership }
+- **SynchronizationRight** { TwoWay, Upload, Download, OneWay }
+
+#### Example Code: Using a Logical Concept to Secure an API call.
+
+In the example below, given the following Security layout, 'Power Users' and 'Users' are granted 'List' access.  Conceptually, 'List' is the ability to retrieve a list of records, vs 'Select', which is to retrieve a detail record (supports Master/Details scenarios).  In Ace3, the 'Viewers' role is not granted the 'list' right and will therefore fail the 'AccessAllowed' check.  However, should a SecurityPrincipal happen to also have membership in 'Power Users' or 'Users', that SecurityPrincipal would be permitted access - to prevent that, 'List' is explicitly denied to 'Viewers' in Ace4.
+
+```yaml
+SecureObjects:
+- UniqueName: employeeSecurity
+  Security:
+    DaclAllowInherit: true
+    Dacl:
+      #Ace1
+    - RightType: RecordRight
+      Right: FullControl
+      Allowed: True
+      TrusteeUId: 2b9e9d66-e977-46fc-80b8-4db051c51426 #(Power Users)
+      #Ace2
+    - RightType: RecordRight
+      Right: List, Select, Insert, Update
+      Allowed: True
+      TrusteeUId: ef54a62d-8026-424a-bf09-c4fc9c3deac4 #(Users)
+      #Ace3
+    - RightType: RecordRight
+      Right: Select
+      Allowed: False
+      TrusteeUId: 897d97a1-ff54-405f-98f1-15dd0fdc248d #(Viewers)
+      #Ace4
+    - RightType: RecordRight
+      Right: List
+      Allowed: False  #List is explicitly denied here
+      TrusteeUId: 897d97a1-ff54-405f-98f1-15dd0fdc248d #(Viewers)
+```
+
+```c#
+public List<Employee> GetEmployees(string filter)
+{
+    //Fetch the security information by UniqueName for the currentUser, then eval
+    SecureObject employeeSecurity = _suplexDal.EvalSecureObjectSecurity( "employeeSecurity", currentUser.Name );
+
+    //examine the result
+    if( !employeeSecurity.Security.Results.GetByTypeRight( RecordRight.List ).AccessAllowed )
+        throw new Exception( "You do not have rights to list Employees." );
+
+    //if no exception, fetch and return employees;
+    return new EmployeeAdapter().GetEmployees( filter );
+}
+```
+
+## AceConverters
+
+In order to facilitate securing with concepts that match the intended action, and to avoid excessive sets of parallel security constructs, Suplex supports converting Aces from one type to another.  When using DaclConverters, at runtime, Suplex will _create a new Ace of TargetRightType.TargetRight_ for the current SecurityPrincipal and then evaluate it, where _newAce.Allowed = [resultant security for the SourceRightType.SourceRight]_.  The new Aces support inheritance settings, and as such may be propagated or not to child SecureObjects Dacls.  The code-equivalent of a DaclConverter would be:
+
+```c#
+//'this' is the current SecureObject
+this.Security.Dacl.Add(
+    new AccessControlEntry<{TargetRightType}>
+    {
+        Allowed = this.Security.Results.GetByTypeRight( {SourceRightType.SourceRight} ).AccessAllowed,
+        Right = {TargetRight},
+        Inheritable = true | false
+    }
+);
+```
+
+#### Example Code: DaclConverters
+
+Consider the additional DaclConverters security information, as an extension to the information from the above example.  Here, the resultant security for the 'List' right is converted to UIRight.enabled, thus abstracting the record management logical concepts, and instead expressing the rights in UI logical concepts.  In keeping with general Suplex principles, the application-specific concepts that produced this result are not known.
+
+```yaml
+SecureObjects:
+- UniqueName: employeeSecurity
+  Security:
+    DaclAllowInherit: true
+    Dacl: #Aces 1..4 as shown above
+    DaclConverters:
+    - SourceRightType: RecordRight
+      SourceRight: List
+      TargetRightType: UIRight
+      TargetRight: Enabled
+      Inheritable: True
+```
+
+```c#
+public void ApplyDialogSecurity()
+{
+    //Fetch the security information by UniqueName for the currentUser, then eval
+    SecureObject employeeSecurity = _suplexDal.EvalSecureObjectSecurity( "employeeSecurity", currentUser.Name );
+
+    //The DaclConverter will have converted RecordRight.List -> UIRight.Enabled
+    btnGetEmployees.Enabled =
+        employeeSecurity.Security.Results.GetByTypeRight( UIRight.Enabled ).AccessAllowed;
+}
+```
+
+## Suplex Role Construction and Group Nesting
+
+Role construction in Suplex is accomplished by aggregating sets of logical Rights across multiple SecureObjects, where each role can contain any arbitrary set of rights.  Roles in Suplex are really just dedicated Groups, where the function of the group is to serve as the Trustee in Aces.  Formally, Suplex doesn't know if you dedicate Groups to serve as Roles or not, but there are general best-practices that can help maintain sanity in security admin:
+
+- Create Role-groups with a defined naming convention.  These Role-groups are typically aligned to application concepts.  Eg: 'Billing RWD', 'Billing RO', 'Billing Reports'.  Use the Role-groups as Trustees on Aces.
+- Create User-groups as containers for Users or other Groups (nested Groups).  A typical implementation sources User-groups from an external provider, such as an LDAP source, like ActiveDirectory.  Add the User-groups as members of the Role-groups.  User-groups are commonly aligned to team function.
+- Aggregate Rights down a SecureObject hierarchy from least-permissive rights at root nodes to most-permissive rights at leaf nodes.  This avoids accidental inheritance of overly permissive structures.
+- Never create an Ace with a User SecurityPrincipal as the Trustee.  This is hard to maintain and poorly scalable.  Although Suplex supports this practice under the hood, the Suplex UI doesn't provide this edit capability.  Even if you only have one User in a Role, create the Role as a Trustee, create a User-Group and make it a member of the Role, and add the User to the User-group.  You'll thank yourself later.
+
+## Detail on SecureObjects and Inheritance
+
+A Suplex SecureObject is essentially a security topic within your application.  The SecureObject could be an actual object (instantiated class), or a "container" (a logical representation only).  SecureObjects host a SecurityDescriptor which contains an Acl (list of permissions, i.e. Aces), where Aces are the Rights that are granted/denied to Trustees (Groups, dedicated as Roles).  SecurityDescriptors control Ace propagation in the inheritance model, and individual Aces can define their own inheritance settings, as well.
+
+To better understand inheritance, consider the following diagram, taking a simple SecureObject hierarchy and two Suplex conceptual Rights, 'RecordRight.FullControl' and 'RecordRight.Insert | Update'.  In the example:
+
+- The 'RecordRight.FullControl' permission is individually configured not to inherit, therefore applies only to SecureObject0.
+- The 'RecordRight.Insert | Update' permission propagates from SecureObject0 to SecureObject1, but does not further propagate to SecureObject2 as SecureObject2 specifically blocks inheritance. 
 
 <p align="center">
 <img src="../img/secobj_hier.png" width="65%">
 </p>
-
-
-
-
-
-- UIRight { FullControl, Operate, Enabled, Visible }
-- RecordRight { FullControl, Delete, Update, Insert, Select, List }
