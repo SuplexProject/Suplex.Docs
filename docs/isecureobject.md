@@ -110,7 +110,7 @@ The System Access Control List is a collection of IAccessControlEntryAudit (Audi
 |UId|Guid|Yes|Primary key in the datastore, a GUID to support replication amongst stores.
 |Allowed|bool|Yes|A value of `true` grants access to a permission, and a value of `false` explicitly denies access to a permission.  **Important**: An explicit deny __always__ overrides a grant.
 |Inheritable|bool|Yes|Specifies whether the current Ace will propagate to child Dacls.
-|InheritedFrom|Nullable Guid|No|System-populated at runtime; the UId of the original Ace from which the current entry was created.
+|InheritedFrom|Nullable Guid|No|System-populated at runtime; the UId of the original Ace from which the current entry was created, <_null_> if provisioned directly, or Guid.Empty if dynamically created by an AceConverter.
 |TrusteeUId|Nullable Guid|No*|The UId of the User or Group to which the Ace is assigned.  When the containing Acl is evaluated, any Aces present will be included in the resultant security calculation.  Strictly speaking, Trustee-free Aces could be inserted into an Acl at runtime and evaluated safely.
 |Right|T|Yes|T can be any Enum with a Flags attribute, such that individual rights can be combined for a single permission entry.  Built-in Rights enums are shown below.
 

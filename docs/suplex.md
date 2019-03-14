@@ -10,7 +10,7 @@ I wrote Suplex because I got tired of copy/pasting code into similar (but always
 
 ## Traditional RBAC: Roles & Rights
 
-A traditional RBAC is is typically *Users/Groups => Role => Right*, where Rights are defined in application-specific ideas and implemented in matching code blocks.  The drawback to this approach is one must understand all possible security profiles before coding, or the Rights must be sufficiently granular to accommodate unforseen and anomalous profiles.  As developers, we'll probably choose granularity, but, the resultant RBAC Rights list can end up being quite large, which may confuse consumers, or just be a lot of work to maintain.  We could consolidate, but that, of course, defeats the granularity.  Another general problem is alignment of RBAC Rights definitions to code - not every code action neatly matches discreet Right definitions, thus hampering optimally granulating Rights.
+A traditional RBAC is typically *Users/Groups => Roles => Rights*, where Rights are defined in application-specific ideas and implemented in matching code blocks.  The drawback to this approach is one must understand all possible security profiles before coding, or the Rights must be sufficiently granular to accommodate unforseen and anomalous profiles.  As developers, we'll probably choose granularity, but, the resultant RBAC Rights list can end up being quite large, which may confuse consumers, or just be a lot of work to maintain.  We could consolidate, but that, of course, defeats the granularity.  Another general problem is alignment of RBAC Rights definitions to code - not every code action neatly matches discreet Right definitions, thus hampering optimally granulating Rights.
 
 In the example diagram below, the initial RBAC is defined with Rights 'Read/Write', 'Delete', and 'Configure', mapped to corresponding code actions, and there's only one bit of shared-Rights-code where the 'Delete' and 'Configure' actions overlap.  As developers, a small if-clause on the top of the shared code is not ideal, but we're probably only slightly unhappy.
 
@@ -30,7 +30,7 @@ if( User.HasRight("Delete") || User.HasRight("Configure") )
 }
 ```
 
-The real problem doesn't come until later, when an anomalous Role request comes about - 'Interloper' - which requires defining an unforseen 'Mixup' that pulls together a little of 'Read/Write', a little 'Delete', and a little 'Configure'.  Options for handling that:
+The real problem doesn't come until later, when an anomalous Role request comes about - 'Interloper' - which requires defining an unforseen 'Mixup' Role that pulls together a little of 'Read/Write', a little 'Delete', and a little 'Configure'.  Options for handling that:
 
 - **Option 1**: Grant users access to 'Power Users' and 'Admins'.  That works, but it provides greater access than desired.  When an anomalous request arrives, this is often the chosen solution.
 - **Option 2**: Program a new Role ('Interlopers') that properly defines the new Right ('Mixup').  This requires code maintenance, regression testing, documentation, and more.
@@ -68,6 +68,9 @@ secureObject1.Security.Results.GetByTypeRight( RecordRight.Insert ).AccessAllowe
 
 **A quick Glossary and note on Casing Convention:**
 
+- **SecurityPrincipal**: a User or Group.
+- **Trustee**: a SecurityPrincipal to which a Right has been granted.
+- **Role**: In Suplex, a Role is really a Group, dedicated for aggregating Rights.
 - **SecureObject**: an item onto which permissions are placed.
 - **UniqueName**: the human-friendly name for a SecureObject, should be unique within a discreet hierarchy.
 - **SecurityDescriptor**: the physical code structure that holds permission information.
@@ -76,11 +79,7 @@ secureObject1.Security.Results.GetByTypeRight( RecordRight.Insert ).AccessAllowe
 - **Dacl**: Discretionary Access Control List; permission Aces.
 - **Sacl**: System Access Control List; audit Aces.
 - **SecurityResults**: the resultant security, post-evaluation, for a given SecurityPrincipal on a SecureObject.
-- **SecurityPrincipal**: a User or Group.
-- **Trustee**: a SecurityPrincipal to which a Right has been granted.
-- **Role**: In Suplex, a Role is really a Group, dedicated for aggregating Rights.
 - **_Convention_**: Acronyms for Suplex structures, such as 'Acl', are expressed in CamelCase for readability and to bear similarity to the code base.
-
 
 ## Securing by Logical Concept
 
@@ -90,10 +89,10 @@ As mentioned above, traditional RBAC requires one to either define exhaustive se
 
 The following are the built-in logical Rights, but extending Suplex is as simple as having any enum with a Flags attribute.
 
-- **UIRight** { FullControl, Operate, Enabled, Visible }
-- **RecordRight** { FullControl, Delete, Update, Insert, Select, List }
-- **FileSystemRight** { FullControl, Execute, Delete, Write, Create, Read, List, ChangePermissions, ReadPermissions, TakeOwnership }
-- **SynchronizationRight** { TwoWay, Upload, Download, OneWay }
+- **UIRight**: { FullControl, Operate, Enabled, Visible }
+- **RecordRight**: { FullControl, Delete, Update, Insert, Select, List }
+- **FileSystemRight**: { FullControl, Execute, Delete, Write, Create, Read, List, ChangePermissions, ReadPermissions, TakeOwnership }
+- **SynchronizationRight**: { TwoWay, Upload, Download, OneWay }
 
 #### Example Code: Using a Logical Concept to Secure an API call.
 
@@ -131,7 +130,8 @@ SecureObjects:
 public List<Employee> GetEmployees(string filter)
 {
     //Fetch the security information by UniqueName for the currentUser, then eval
-    SecureObject employeeSecurity = _suplexDal.EvalSecureObjectSecurity( "employeeSecurity", currentUser.Name );
+    SecureObject employeeSecurity =
+        _suplexDal.EvalSecureObjectSecurity( "employeeSecurity", currentUser.Name );
 
     //examine the result
     if( !employeeSecurity.Security.Results.GetByTypeRight( RecordRight.List ).AccessAllowed )
@@ -209,3 +209,62 @@ To better understand inheritance, consider the following diagram, taking a simpl
 <p align="center">
 <img src="../img/secobj_hier.png" width="65%">
 </p>
+
+### More on Inheritance and Allows, Denies
+
+As mentioned above, the SecureObject SecurityDescriptor governs inheritance settings of the SecureObject itself, and Aces within Acls independently manage their own inheritability. Additionally, Aces carry an `InheritedFrom` property to show their origin.  The settings are:
+
+- _secureObject.Security_.DaclAllowInherit [and] .SaclAllowInherit
+- _ace_.Inheritable
+- _ace_.InheritedFrom - set at runtime during Ace evaluation, the value will be:
+    - <_null_> if the Ace is provisioned directly in Acl
+    - the UId of the "parent" (original) Ace if inherited
+    - Guid.Empty if originated via an AceConverter
+
+Be mindful of Ace propagation as it relates to group membership.  Accidental over-permissioning may occur when a user unexpectedly exists in a Role, and that Role is given high levels of permissions on a root node in a SecureObject hierarchy.  Remember to provide the least-permissive rights at root nodes and most-permissive rights at leaf nodes.
+
+Further, use explicit-Denies sparingly as a Deny-Ace _always overrides_ an Allow.  In general, it's best to locate Deny-Aces lower in the hierarchy and mark them with `Inheritable = false` to avoid accidental permission-blocks.
+
+#### Example Code: Acl and Ace Inheritance Settings
+
+```yaml
+SecureObjects:
+- UniqueName: employeeSecurity
+  Security:
+    DaclAllowInherit: true
+    SaclAllowInherit: true
+    Dacl:
+    - RightType: RecordRight
+      Right: FullControl
+      Allowed: True
+      TrusteeUId: 2b9e9d66-e977-46fc-80b8-4db051c51426 #(Power Users)
+      Inheritable: True
+    Sacl:
+    - RightType: RecordRight
+      Right: FullControl
+      Allowed: True
+      Denied: True
+      TrusteeUId: 2b9e9d66-e977-46fc-80b8-4db051c51426 #(Power Users)
+      Inheritable: True
+```
+
+```c#
+public void SHowInheritance()
+{
+    //Fetch the security information by UniqueName for the currentUser, then eval
+    SecureObject employeeSecurity =
+        _suplexDal.EvalSecureObjectSecurity( "employeeSecurity", currentUser.Name );
+
+    //get a reference to the SecurityDescriptor for convenience
+    SecurityDescriptor sd = employeeSecurity.Security;
+
+    //The DaclConverter will have converted RecordRight.List -> UIRight.Enabled
+    Console.WriteLine( $"DaclAllowInherit: {sd.DaclAllowInherit}" );
+    Console.WriteLine( $"SaclAllowInherit: {sd.SaclAllowInherit}" );
+    Console.WriteLine( $"Dacl Ace Inheritable: {sd.Dacl[0].Inheritable}" );
+    Console.WriteLine( $"Dacl Ace InheritedFrom: {sd.Dacl[0].InheritedFrom}" );
+    Console.WriteLine( $"Sacl Ace Inheritable: {sd.Sacl[0].Inheritable}" );
+    Console.WriteLine( $"Sacl Ace InheritedFrom: {sd.Sacl[0].InheritedFrom}" );
+}
+```
+
