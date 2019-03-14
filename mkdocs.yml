@@ -3,5 +3,5 @@ pages:
 - QuickStart: index.md
 - Using Suplex, Best Practice: suplex.md
 - Secure Objects: isecureobject.md
-# - Security Principals: securityprincipals.md
+- Security Principals: securityprincipals.md
 theme: readthedocs
