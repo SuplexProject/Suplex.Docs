@@ -50,6 +50,8 @@ This example uses a simple WinForms app to demonstrate Suplex integration.  The 
 
 - A combobox to simulate switching security context.
 
+- An "Employees DataAccessLayer" (fake DAL to simulate data security paradigms)
+
 - Full source here: <a href="https://github.com/SuplexProject/Suplex.Sample" target="_blank">Suplex.Sample</a>
 
 Most of the code in the sample app is setup-oriented. not functionally relevant to Suplex itself.  Below are the key functions to instantiating the FileSystemDal and selecting security at runtime.  The critical code elements are:
@@ -85,44 +87,75 @@ public partial class MainDlg : Form
         this.UiThreadHelper( () => cmbUsers.DataSource = new BindingSource( _suplexDal.Store.Users.OrderBy( u => u.Name ).ToList(), null ).DataSource );
     }
 
+    #region Apply Security
     /// <summary>
-    /// Simulates changing security context.  Normally, this would occur at the time of application/method invocation.
+    /// Simulates switching the current security context
     /// </summary>
     private void cmbUsers_SelectedIndexChanged(object sender, EventArgs e)
     {
-        //Evaluate the security information, starting from the top-most control
-        SecureObject secureObject =
-            (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmMain", ((User)cmbUsers.SelectedItem).Name );
+        string currentUser = ((User)cmbUsers.SelectedItem).Name;
 
-        if( chkApplyRecursive.Checked )
-            ApplyRecursive( secureObject );
-        else
-            ApplyDirect( secureObject );
+        //set the "current user" on the Employees DAL
+        _employeeDal.CurrentUser = currentUser;
+
+        //refresh the Employees list based on "currentUser"
+        RefreshEmployeesList();
+
+        //Evaluate the security information, starting from the top-most control
+        SecureObject secureObject = (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmEditor", currentUser );
+
+        //apply security to frmEditor/children
+        ApplyRecursive( secureObject );
+
+        //alternate, manual method (not preferred)
+        //ApplyDirect( secureObject );
     }
 
     /// <summary>
-    /// Brute-force permissioning - direct lookup of results with "known" translation of non-UI rights
+    /// Recursively examines frmEditor and its children for applying security; see UIExtensions
+    /// </summary>
+    /// <param name="secureObject">The matching SecureObject to frmEditor</param>
+    void ApplyRecursive(SecureObject secureObject)
+    {
+        frmEditor.ApplySecurity( secureObject );
+    }
+
+    /// <summary>
+    /// Brute-force permissioning - direct lookup of results with "known" translation of non-UI rights (not preferred)
     /// </summary>
     /// <param name="secureObject">A reference to the resolved/evaluated security object.</param>
     void ApplyDirect(SecureObject secureObject)
     {
-        frmMain.Visible = secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
-        txtId.Visible = secureObject?.FindChild<SecureObject>( "txtId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
-        btnCreate.Enabled = secureObject?.FindChild<SecureObject>( "btnCreate" ).Security.Results.GetByTypeRight( RecordRight.Insert ).AccessAllowed ?? false;
+        frmEditor.Visible = secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
+        lblEmployeeId.Visible = secureObject?.FindChild<SecureObject>( "lblEmployeeId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
+        btnUpdate.Enabled = secureObject?.FindChild<SecureObject>( "btnUpdate" ).Security.Results.GetByTypeRight( RecordRight.Update ).AccessAllowed ?? false;
     }
+    #endregion
 
-    /// <summary>
-    /// Recursive, discovery-based security application; see UIExtensions->ApplySecurity
-    /// </summary>
-    /// <param name="secureObject">A reference to the resolved/evaluated security object.</param>
-    void ApplyRecursive(SecureObject secureObject)
+    private void RefreshEmployeesList()
     {
-        frmMain.ApplySecurity( secureObject );
+        try
+        {
+            lstEmployees.DisplayMember = "Name";
+            lstEmployees.Items.Clear();
+            List<Employee> employees = _employeeDal.GetEmployees()?.OrderBy( emps => emps.Name ).ToList();
+            if( employees != null )
+                foreach( Employee employee in employees )
+                    lstEmployees.Items.Add( employee );
+            else
+                lstEmployees.Items.Clear();
+
+            lstMessages.Items.Insert( 0, $"Info : Retrieved {employees?.Count ?? 0} Employee records." );
+        }
+        catch( Exception ex )
+        {
+            lstMessages.Items.Insert( 0, $"Error: {ex.Message}" );
+        }
     }
 }
 
 public static class UIExtensions
-{
+
     public static void ApplySecurity(this Control control, ISecureObject secureObject)
     {
         if( secureObject == null )
@@ -137,13 +170,114 @@ public static class UIExtensions
         {
             control.Visible = found.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
             control.Enabled = found.Security.Results.GetByTypeRight( UIRight.Enabled ).AccessAllowed;
-            if( control is TextBox )
-                ((TextBox)control).ReadOnly = !found.Security.Results.GetByTypeRight( UIRight.Operate ).AccessAllowed;
+            if( control is TextBox textBox )
+                textBox.ReadOnly = !found.Security.Results.GetByTypeRight( UIRight.Operate ).AccessAllowed;
         }
 
         if( control.HasChildren )
             foreach( Control child in control.Controls )
                 child.ApplySecurity( secureObject );
     }
+}
+```
+
+Here are sample DAL methods:
+```c#
+public class EmployeeDataAccessLayer
+{
+    ISuplexDal _suplexDal = null;
+    List<Employee> _employees = null;
+
+    #region ctor
+    public EmployeeDataAccessLayer(ISuplexDal suplexDal)
+    {
+        //init Suplex DAL instance
+        _suplexDal = suplexDal;
+
+        //create some Employees
+        _employees = new List<Employee>
+        {
+            { new Employee( 1 ) { Name = "Irma Tahnee" } },
+            { new Employee( 2 ) { Name = "Cat Maxwell" } },
+            { new Employee( 3 ) { Name = "Krystelle Padma" } },
+            { new Employee( 4 ) { Name = "Louis Zola" } },
+            { new Employee( 5 ) { Name = "Esmaralda Grahame" } }
+        };
+    }
+    #endregion
+
+
+    #region Security implementation
+    /// <summary>
+    /// "Current user context" - normally this would be pulled from the environment as a local or web current user context
+    /// </summary>
+    public string CurrentUser { get; set; }
+
+    /// <summary>
+    /// Utility method to validate security access for a given right on Employee records
+    /// </summary>
+    /// <param name="recordRight">The right for which to validate access</param>
+    bool HasAccess(RecordRight recordRight)
+    {
+        //Look up security information by SecureObject->UniqueName => "EmployeeRecords" for the CurrentUser
+        SecureObject employeeSecurity = (SecureObject)_suplexDal.EvalSecureObjectSecurity( "EmployeeRecords", CurrentUser );
+
+        //Assess AccessAllowed
+        return employeeSecurity?.Security.Results.GetByTypeRight( recordRight ).AccessAllowed ?? false;
+    }
+
+    /// <summary>
+    /// Utility method to validate security access for a given right on Employee records
+    /// </summary>
+    /// <param name="recordRight">The right for which to validate access</param>
+    void HasAccessOrException(RecordRight recordRight)
+    {
+        //Look up security information by SecureObject->UniqueName => "EmployeeRecords" for the CurrentUser
+        SecureObject employeeSecurity = (SecureObject)_suplexDal.EvalSecureObjectSecurity( "EmployeeRecords", CurrentUser );
+
+        //Assess AccessAllowed, throw Exception if no rights
+        if( !employeeSecurity?.Security.Results.GetByTypeRight( recordRight ).AccessAllowed ?? true )
+            throw new Exception( $"{CurrentUser} does not have rights to {recordRight} Employee records." );
+    }
+    #endregion
+
+
+    #region CRUD methods
+    /// <summary>
+    /// Get the Employees list
+    /// </summary>
+    /// <param name="filter">Optional Name filter</param>
+    /// <returns>All or matching Employees</returns>
+    public List<Employee> GetEmployees(string filter = null)
+    {
+        //Check for access rights, throws exception if denied
+        HasAccessOrException( RecordRight.List );
+
+        if( !string.IsNullOrWhiteSpace( filter ) )
+            return _employees.FindAll( e => e.Name.Contains( filter ) );
+        else
+            return _employees;
+    }
+
+    /// <summary>
+    /// Finds Employee by Id and updates the fields
+    /// </summary>
+    /// <param name="emp">The Employee record to find (by Id)</param>
+    /// <returns>The updated Employee record if found, or null</returns>
+    public Employee UpdateEmployee(Employee emp)
+    {
+        //Check for access rights, throws exception if denied
+        HasAccessOrException( RecordRight.Update );
+
+        if( emp == null )
+            return null;
+
+        Employee found = _employees.FirstOrDefault( e => e.Id == emp.Id );
+        if( found != null )
+            found.Name = emp.Name;
+
+        return found;
+    }
+    #endregion
 }
 ```
