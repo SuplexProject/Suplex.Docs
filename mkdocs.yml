@@ -2,6 +2,7 @@ site_name: Suplex
 pages:
 - QuickStart: index.md
 - Using Suplex, Best Practice: suplex.md
+- Sample App Deep Dive: sampleapp.md
 - Secure Objects: isecureobject.md
 - Security Principals: securityprincipals.md
 theme: readthedocs
