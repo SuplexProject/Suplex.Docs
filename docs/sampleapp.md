@@ -128,8 +128,6 @@ private void RefreshEmployeesList()
         if( employees != null )
             foreach( Employee employee in employees )
                 lstEmployees.Items.Add( employee );
-        else
-            lstEmployees.Items.Clear();
 
         lstMessages.Items.Insert( 0, $"Info : Retrieved {employees?.Count ?? 0} Employee records." );
     }
@@ -341,4 +339,18 @@ public List<Employee> GetEmployees(string filter = null)
 
 <a href="#code-review">Back to Code Review ToC</a>
 
+## Security Configuration - Users, Groups, and Roles
+
+The SampleApp RBAC configuration follows Suplex best-practice separation of "User-groups" and "Role-groups" -- the distinction being that User-groups are typically aligned to natural business functions, such as workgroups/teams, and Role-groups are aligned to application control requirements.  In the SampleApp, all the groups a "local" (Suplex proprietary), meaning you can edit group membership.  Most commonly, User-groups are sourced from an external provider, such as an LDAP store like ActiveDirectory.  In the setup, Users/User-groups are members of User-groups, User-groups are members of Role-groups, and Role-groups are permissioned to SecureObjects.
+
+Note that some users are disabled -- this is to show the result at the consumer where, in the course of business, users may need to be prevented from gaining access to protected resources.  Disabling a user or group will prevent all access the SecurityPrincipal is otherwise afforded.
+
+![Suplex Sample App Dialogue](img/usersGroups.png "Suplex Sample App Dialogue")
+
+
+## Security Configuration - SecureObjects and Aces
+
+Following Suplex best practices further, few permissions are implemented _directly_.  The SampleApp is notionally oriented toward managing Employee records, which is largely governed by rights to access and modify said records.  As such, permissions are applied at the Employees_Root object and then inherited and converted down the tree.  Revisiting the screenshot from above, note that RecordRights from Employees_Root are converted at the point of consumption to required UIRights.  AceConverters use the resultant security for the source permissions, meaning, whatever RecordRights the user ends up with at runtime, independent of Role, will be converted to a UIRight and applied accordingly.
+
+![Suplex Sample App Dialogue](img/aceConverters.png "Suplex Sample App Dialogue")
 
