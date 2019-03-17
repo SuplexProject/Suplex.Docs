@@ -54,7 +54,7 @@ This example uses a simple WinForms app to demonstrate Suplex integration.  The 
 
 - Full source here: <a href="https://github.com/SuplexProject/Suplex.Sample" target="_blank">Suplex.Sample</a>
 
-Most of the code in the sample app is setup-oriented. not functionally relevant to Suplex itself.  Below are the key functions to instantiating the FileSystemDal and selecting security at runtime.  The critical code elements are:
+Most of the code in the sample app is setup-oriented, not functionally relevant to Suplex itself.  Below are the key functions to instantiating the FileSystemDal and selecting security at runtime.  The critical code elements are:
 
 ```c#
 //Load the Suplex FileStore from disk
@@ -64,11 +64,11 @@ _suplexDal = FileSystemDal.LoadFromYamlFile( filestorePath );
 //Note: The return value may be null if the object is not found, the user is disabled, or for other reasons.
 //      Be sure to null-check usage.
 SecureObject secureObject =
-    (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmMain", ((User)cmbUsers.SelectedItem).Name );
+    (SecureObject)_suplexDal.EvalSecureObjectSecurity( "frmEditor", ((User)cmbUsers.SelectedItem).Name );
 
 //Assess 'AccessAllowed' (bool) for the object or a descendant (child) object
 secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
-secureObject?.FindChild<SecureObject>( "txtId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
+secureObject?.FindChild<SecureObject>( "lblEmployeeId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed;
 ```
 
 In context, here's the same code as applied within the relevant methods:
@@ -84,7 +84,8 @@ public partial class MainDlg : Form
     void RefreshSuplex(string filestorePath)
     {
         _suplexDal = FileSystemDal.LoadFromYamlFile( filestorePath );
-        this.UiThreadHelper( () => cmbUsers.DataSource = new BindingSource( _suplexDal.Store.Users.OrderBy( u => u.Name ).ToList(), null ).DataSource );
+        this.UiThreadHelper( () => cmbUsers.DataSource =
+            new BindingSource( _suplexDal.Store.Users.OrderBy( u => u.Name ).ToList(), null ).DataSource );
     }
 
     #region Apply Security
@@ -127,8 +128,10 @@ public partial class MainDlg : Form
     void ApplyDirect(SecureObject secureObject)
     {
         frmEditor.Visible = secureObject?.Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
-        lblEmployeeId.Visible = secureObject?.FindChild<SecureObject>( "lblEmployeeId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
-        btnUpdate.Enabled = secureObject?.FindChild<SecureObject>( "btnUpdate" ).Security.Results.GetByTypeRight( RecordRight.Update ).AccessAllowed ?? false;
+        lblEmployeeId.Visible =
+            secureObject?.FindChild<SecureObject>( "lblEmployeeId" ).Security.Results.GetByTypeRight( UIRight.Visible ).AccessAllowed ?? false;
+        btnUpdate.Enabled =
+            secureObject?.FindChild<SecureObject>( "btnUpdate" ).Security.Results.GetByTypeRight( RecordRight.Update ).AccessAllowed ?? false;
     }
     #endregion
 
