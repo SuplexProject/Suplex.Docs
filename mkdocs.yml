@@ -5,4 +5,5 @@ pages:
 - Sample App Deep Dive: sampleapp.md
 - Secure Objects: isecureobject.md
 - Security Principals: securityprincipals.md
+- FileSystemDal: filesystemdal.md
 theme: readthedocs

@@ -341,9 +341,9 @@ public List<Employee> GetEmployees(string filter = null)
 
 ## Security Configuration - Users, Groups, and Roles
 
-The SampleApp RBAC configuration follows Suplex best-practice separation of "User-groups" and "Role-groups" -- the distinction being that User-groups are typically aligned to natural business functions, such as workgroups/teams, and Role-groups are aligned to application control requirements.  In the SampleApp, all the groups a "local" (Suplex proprietary), meaning you can edit group membership.  Most commonly, User-groups are sourced from an external provider, such as an LDAP store like ActiveDirectory.  In the setup, Users/User-groups are members of User-groups, User-groups are members of Role-groups, and Role-groups are permissioned to SecureObjects.
+The SampleApp RBAC configuration follows Suplex best-practice separation of "User-groups" and "Role-groups" -- the distinction being that User-groups are typically aligned to natural business functions, such as workgroups/teams, and Role-groups are aligned to application control requirements.  In the SampleApp, all the groups are "local" (Suplex proprietary), meaning you can edit group membership.  Most commonly, User-groups are sourced from an external provider, such as an LDAP store like ActiveDirectory.  In the setup, Users/nested-User-groups are members of User-groups, User-groups are members of Role-groups, and Role-groups are permissioned to SecureObjects.  Beyond separating business functions from application control requirements, honoring the User-group/Role-group division supports enterprise entitlement processes and allows the SecureObject permissions ro remain constant and predictable.
 
-Note that some users are disabled -- this is to show the result at the consumer where, in the course of business, users may need to be prevented from gaining access to protected resources.  Disabling a user or group will prevent all access the SecurityPrincipal is otherwise afforded.
+Note that some users are disabled -- this is to show the result at the consumer where, in the normal course of business, users may need to have all access to protected resources immediately revoked.  Disabling a user or group will prevent all access the SecurityPrincipal is otherwise afforded.
 
 ![Suplex Sample App Dialogue](img/usersGroups.png "Suplex Sample App Dialogue")
 
