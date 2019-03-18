@@ -10,6 +10,10 @@ The intent of Suplex is:
 2. To avoid tightly-coupling the security Role implementation to application features or modules, and thus:
 3. Avoid "role bleed," where existing Role-implementation to app-feature encompasses too great a scope, and over time requires code maintenance to narrow the scope, where otherwise there is insufficient granularity in Roles manifested at the point of consumption.
 
+### Learn More
+
+Read about [using Suplex and best practices](suplex/ "About Suplex"), check out the [code and find downloads](https://github.com/suplexproject "Suplex on GitHub") on GitHub, or if tl;dr, jump in to the QuickStart below.  A deep-dive on the SampleApp from the QuickStart can be found [here](sampleapp/ "SampleApp Deep-Dive").
+
 ## QuickStart
 
 Wanna get started without a lot of pain?  Me too.  Given the philosophical statement above, you won't need much code to use Suplex in your application.  This quick start guide assumes a working knowledge of Visual Studio, C#, and NuGet.
