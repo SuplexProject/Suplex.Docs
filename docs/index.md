@@ -111,9 +111,6 @@ public partial class MainDlg : Form
 
         //apply security to frmEditor/children
         ApplyRecursive( secureObject );
-
-        //alternate, manual method (not preferred)
-        //ApplyDirect( secureObject );
     }
 
     /// <summary>
@@ -149,8 +146,6 @@ public partial class MainDlg : Form
             if( employees != null )
                 foreach( Employee employee in employees )
                     lstEmployees.Items.Add( employee );
-            else
-                lstEmployees.Items.Clear();
 
             lstMessages.Items.Insert( 0, $"Info : Retrieved {employees?.Count ?? 0} Employee records." );
         }
